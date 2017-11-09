@@ -14,63 +14,41 @@ class Message(object):
         def __ne__(self, other):
             return not self.__eq__(other)
 
-    MTYPE_JOIN_REQUEST = 0
-    MTYPE_JOIN_ACCEPT = 1
-    MTYPE_UNCONFIRMED_DATA_UP = 2
-    MTYPE_UNCONFIRMED_DATA_DOWN = 3
-    MTYPE_CONFIRMED_DATA_UP = 4
-    MTYPE_CONFIRMED_DATA_DOWN = 5
-
-    MTYPE_DESCRIPTIONS: [
-        'Join Request',
-        'Join Accept',
-        'Unconfirmed Data Up',
-        'Unconfirmed Data Down',
-        'Confirmed Data Up',
-        'Confirmed Data Down',
-        'RFU',
-        'Proprietary'
-    ]
-
-    MTYPE_DIRECTIONS = [
-        None,
-        None,
-        'up',
-        'down',
-        'up',
-        'down',
-        None,
-        None
-    ]
+    JOIN_REQUEST = Mtype(0, 'Join Request')
+    JOIN_ACCEPT = Mtype(1, 'Join Accept')
+    UNCONFIRMED_DATA_UP = Mtype(2, 'Unconfirmed Data Up', 'up')
+    UNCONFIRMED_DATA_DOWN = Mtype(3, 'Unconfirmed Data Down', 'down')
+    CONFIRMED_DATA_UP = Mtype(4, 'Confirmed Data Up', 'up')
+    CONFIRMED_DATA_DOWN = Mtype(5, 'Confirmed Data Down', 'down')
 
     FCTRL_ADR = 0x80
     FCTRL_ADRACKREQ = 0x40
     FCTRL_ACK = 0x20
     FCTRL_FPENDING = 0x10
 
-    mtypes = {
-        MTYPE_JOIN_REQUEST: ('Join Request', None),
-        MTYPE_JOIN_ACCEPT:  ('Join Accept', None),
-        MTYPE_UNCONFIRMED_DATA_UP:  ('Unconfirmed Data Up', 'up'),
-        MTYPE_UNCONFIRMED_DATA_DOWN:  ('Unconfirmed Data Down', 'down'),
-        MTYPE_CONFIRMED_DATA_UP:  ('Confirmed Data Up', 'up'),
-        MTYPE_CONFIRMED_DATA_DOWN:  ('Confirmed Data Down', 'down'),
-        6: ('RFU', None),
-        7: ('Proprietary', None)
-    }
-
     @property
     def is_data_message(self):
         # TODO: set mtype
         if self.mtype in (
-                MTYPE_UNCONFIRMED_DATA_UP,
-                MTYPE_UNCONFIRMED_DATA_DOWN,
-                MTYPE_CONFIRMED_DATA_UP,
-                MTYPE_CONFIRMED_DATA_DOWN):
+                UNCONFIRMED_DATA_UP,
+                UNCONFIRMED_DATA_DOWN,
+                CONFIRMED_DATA_UP,
+                CONFIRMED_DATA_DOWN):
             return True
         return False
 
-    def __init__(self, payload):
-        self._payload = payload
-        self.mhdr = payload[:1]
-        self.mtype = mhdr[0] >> 5)
+    def __init__(self, phy_payload):
+        self._payload = phy_payload
+        mhdr = payload[0]#payload[:1]
+        self.mtype, _, _ = self.mhdr = (mhdr >> 5, mhdr, mhdr & 0x03, mhdr & 0x1c)
+        self.mac_payload [1:-4]
+        self.mic[-4:]
+
+        if self.mtype == JOIN_REQUEST:
+            self.app_eui = mac_payload[:8]
+            self.dev_eui =  mac_payload[8:16]
+            self.dev_nonce = mac_payload[16:]
+        elif self.mtype == JOIN_ACCEPT:
+            pass
+        elif self.is_data_message:
+            pass
