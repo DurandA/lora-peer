@@ -27,8 +27,8 @@ class TestMessage(unittest.TestCase):
 
         assert message.mtype == message.mhdr[0] == Message.UNCONFIRMED_DATA_UP
 
-        assert message.ack == False
-        assert message.adr == False
+        assert message.f_ctrl.ack == False
+        assert message.f_ctrl.adr == False
 
     def test_parse_empty_payload_message(self):
         return

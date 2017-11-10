@@ -2,16 +2,16 @@ import struct
 from typing import ByteString
 
 class FrameControl(object):
-    def __init__(self, f_ctrl):
-        self.adr = f_ctrl & 0x80
-        self.flag6 = f_ctrl & 0x40
-        self.ack = f_ctrl & 0x20
-        self.flag4 = f_ctrl & 0x10
-        self.f_opts_len = f_ctrl & 0x0f
-        self.data = f_ctrl
+    def __init__(self, ctrl_byte):
+        self.adr = ctrl_byte & 0x80
+        self.flag6 = ctrl_byte & 0x40
+        self.ack = ctrl_byte & 0x20
+        self.flag4 = ctrl_byte & 0x10
+        self.f_opts_len = ctrl_byte & 0x0f
+        self.ctrl_byte = ctrl_byte
 
     def __bytes__(self):
-        return bytes([self.data])
+        return bytes([self.ctrl_byte])
 
     def __eq__(self, other):
         return bytes(self) == other
@@ -34,6 +34,39 @@ class UplinkFrameControl(FrameControl):
     @property
     def rfu(self):
         return self.flag4
+
+class FrameHeader(object):
+    def __init__(self, mac_payload, direction):
+        self.dev_addr = mac_payload[:4] # little-endian
+        f_ctrl = mac_payload[4]
+        if direction:
+            self.f_ctrl = DownlinkFrameControl(f_ctrl)
+        else:
+            self.f_ctrl = UplinkFrameControl(f_ctrl)
+        self.f_cnt = int.from_bytes(mac_payload[5:7], byteorder='little') # little-endian
+        self.f_opts = mac_payload[7:7+self.f_opts_len]
+
+    # @property
+    # def adr(self):
+    #     return self.f_ctrl.adr
+    # @property
+    # def rfu(self):
+    #     return self.f_ctrl.rfu
+    # @property
+    # def ack(self):
+    #     return self.f_ctrl.ack
+    # @property
+    # def f_pending(self):
+    #     return self.f_ctrl.f_pending
+    @property
+    def f_opts_len(self):
+        return self.f_ctrl.f_opts_len
+    # @property
+    # def adr_ack_req(self):
+    #     return self.f_ctrl.adr_ack_req
+
+    def __len__(self):
+        return 7+self.f_opts_len
 
 class Message(object):
 
@@ -84,25 +117,6 @@ class Message(object):
     def phy_paylod(self):
         return self.payload
 
-    @property
-    def adr(self):
-        return self.f_ctrl.adr
-    @property
-    def rfu(self):
-        return self.f_ctrl.rfu
-    @property
-    def ack(self):
-        return self.f_ctrl.ack
-    @property
-    def f_pending(self):
-        return self.f_ctrl.f_pending
-    @property
-    def f_opts_len(self):
-        return self.f_ctrl.f_opts_len
-    @property
-    def adr_ack_req(self):
-        return self.f_ctrl.adr_ack_req
-
     def __init__(self, payload):
         self.payload = payload # phy payload
         mhdr = payload[0] #payload[:1]
@@ -111,13 +125,13 @@ class Message(object):
         self.mic = payload[-4:]
 
         if self.mtype == Message.JOIN_REQUEST:
-            self.app_eui = mac_payload[:8:-1]
-            self.dev_eui = mac_payload[8:16:-1]
-            self.dev_nonce = mac_payload[16::-1]
+            self.app_eui = mac_payload[:8:-1] # little-endian
+            self.dev_eui = mac_payload[8:16:-1] # little-endian
+            self.dev_nonce = mac_payload[16::-1] # little-endian
         elif self.mtype == Message.JOIN_ACCEPT:
-            self.app_nonce = mac_payload[:3:-1] # 3 bytes
-            self.net_id = mac_payload[3:6:-1] # 3 bytes
-            self.dev_addr = mac_payload[6:10:-1] # 4 bytes
+            self.app_nonce = mac_payload[:3:-1] # 3 bytes little-endian
+            self.net_id = mac_payload[3:6:-1] # 3 bytes little-endian
+            self.dev_addr = mac_payload[6:10:-1] # 4 bytes little-endian
             self.dl_settings = mac_payload[10] # 1 byte
             self.rx_delay = mac_payload[11] # 1 byte
             if len(mac_payload) == 12+16:
@@ -125,25 +139,27 @@ class Message(object):
             else:
                 self.cf_list = bytes()
         elif self.is_data_message:
-            self.dev_addr = mac_payload[:4] # little-endian
-            f_ctrl = mac_payload[4]
-            if self.direction:
-                self.f_ctrl = DownlinkFrameControl(f_ctrl)
-            else:
-                self.f_ctrl = UplinkFrameControl(f_ctrl)
-            #self.adr, _, self.ack, _, f_opts_len = self.f_ctrl = (f_ctrl & 0x80, f_ctrl & 0x40, f_ctrl & 0x20, f_ctrl & 0x10, f_ctrl & 0x0f)
-            self.f_cnt = int.from_bytes(mac_payload[5:7], byteorder='little') # little-endian
-            self.f_opts = mac_payload[7:7+self.f_opts_len]
+            self.f_hdr = FrameHeader(mac_payload, self.direction)
 
-            self.f_hdr = (self.dev_addr, self.f_ctrl, self.f_cnt, self.f_opts)
-            fhdr_len = 7+self.f_opts_len
-            print('fhdr_len: %i' % fhdr_len)
-            if fhdr_len != len(mac_payload):
-                self.f_port = int.from_bytes(mac_payload[fhdr_len:fhdr_len+1], byteorder='little')
-                self.frm_payload = mac_payload[fhdr_len+1:]
+            if len(self.f_hdr) != len(mac_payload):
+                self.f_port = int.from_bytes(mac_payload[len(self.f_hdr):len(self.f_hdr)+1], byteorder='little')
+                self.frm_payload = mac_payload[len(self.f_hdr)+1:]
             else:
                 self.f_port = bytes()
                 self.frm_payload = bytes()
+
+    @property
+    def dev_addr(self):
+        return self.f_hdr.dev_addr
+    @property
+    def f_ctrl(self):
+        return self.f_hdr.f_ctrl
+    @property
+    def f_cnt(self):
+        return self.f_hdr.f_cnt
+    @property
+    def f_opts(self):
+        return self.f_hdr.f_opts
 
     @classmethod
     def from_hex(cls, _hex):
