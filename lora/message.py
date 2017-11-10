@@ -1,4 +1,39 @@
 import struct
+from typing import ByteString
+
+class FrameControl(object):
+    def __init__(self, f_ctrl):
+        self.adr = f_ctrl & 0x80
+        self.flag6 = f_ctrl & 0x40
+        self.ack = f_ctrl & 0x20
+        self.flag4 = f_ctrl & 0x10
+        self.f_opts_len = f_ctrl & 0x0f
+        self.data = f_ctrl
+
+    def __bytes__(self):
+        return bytes([self.data])
+
+    def __eq__(self, other):
+        return bytes(self) == other
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+class DownlinkFrameControl(FrameControl):
+    @property
+    def rfu(self):
+        return self.flag6
+    @property
+    def f_pending(self):
+        return self.flag4
+
+class UplinkFrameControl(FrameControl):
+    @property
+    def adr_ack_req(self):
+        return self.flag6
+    @property
+    def rfu(self):
+        return self.flag4
 
 class Message(object):
 
@@ -23,11 +58,6 @@ class Message(object):
     CONFIRMED_DATA_UP = MessageType(4, 'Confirmed Data Up', 0)
     CONFIRMED_DATA_DOWN = MessageType(5, 'Confirmed Data Down', 1)
 
-    FCTRL_ADR = 0x80
-    FCTRL_ADRACKREQ = 0x40
-    FCTRL_ACK = 0x20
-    FCTRL_FPENDING = 0x10
-
     @property
     def is_data_message(self):
         # TODO: set mtype
@@ -38,10 +68,40 @@ class Message(object):
                 Message.CONFIRMED_DATA_DOWN):
             return True
         return False
-    
+
+    @property
+    def direction(self):
+        if self.mtype in (
+                Message.UNCONFIRMED_DATA_UP,
+                Message.CONFIRMED_DATA_UP):
+            return 0
+        elif self.mtype in (
+                Message.UNCONFIRMED_DATA_DOWN,
+                Message.CONFIRMED_DATA_DOWN):
+            return 1
+
     @property
     def phy_paylod(self):
         return self.payload
+
+    @property
+    def adr(self):
+        return self.f_ctrl.adr
+    @property
+    def rfu(self):
+        return self.f_ctrl.rfu
+    @property
+    def ack(self):
+        return self.f_ctrl.ack
+    @property
+    def f_pending(self):
+        return self.f_ctrl.f_pending
+    @property
+    def f_opts_len(self):
+        return self.f_ctrl.f_opts_len
+    @property
+    def adr_ack_req(self):
+        return self.f_ctrl.adr_ack_req
 
     def __init__(self, payload):
         self.payload = payload # phy payload
@@ -67,12 +127,16 @@ class Message(object):
         elif self.is_data_message:
             self.dev_addr = mac_payload[:4] # little-endian
             f_ctrl = mac_payload[4]
-            self.adr, _, self.ack, _, f_opts_len = self.f_ctrl = (f_ctrl & 0x80, f_ctrl & 0x40, f_ctrl & 0x20, f_ctrl & 0x10, f_ctrl & 0x0f)
+            if self.direction:
+                self.f_ctrl = DownlinkFrameControl(f_ctrl)
+            else:
+                self.f_ctrl = UplinkFrameControl(f_ctrl)
+            #self.adr, _, self.ack, _, f_opts_len = self.f_ctrl = (f_ctrl & 0x80, f_ctrl & 0x40, f_ctrl & 0x20, f_ctrl & 0x10, f_ctrl & 0x0f)
             self.f_cnt = int.from_bytes(mac_payload[5:7], byteorder='little') # little-endian
-            self.f_opts = mac_payload[7:7+f_opts_len]
+            self.f_opts = mac_payload[7:7+self.f_opts_len]
 
             self.f_hdr = (self.dev_addr, self.f_ctrl, self.f_cnt, self.f_opts)
-            fhdr_len = 7+f_opts_len
+            fhdr_len = 7+self.f_opts_len
             print('fhdr_len: %i' % fhdr_len)
             if fhdr_len != len(mac_payload):
                 self.f_port = int.from_bytes(mac_payload[fhdr_len:fhdr_len+1], byteorder='little')
