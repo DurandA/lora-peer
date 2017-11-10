@@ -38,6 +38,10 @@ class Message(object):
                 Message.CONFIRMED_DATA_DOWN):
             return True
         return False
+    
+    @property
+    def phy_paylod(self):
+        return self.payload
 
     def __init__(self, payload):
         self.payload = payload # phy payload
@@ -61,17 +65,17 @@ class Message(object):
             else:
                 self.cf_list = bytes()
         elif self.is_data_message:
-            self.dev_addr = mac_payload[:4:-1]
+            self.dev_addr = mac_payload[:4] # little-endian
             f_ctrl = mac_payload[4]
-            self.adr, _, _, _, f_opts_len = self.f_ctrl = (f_ctrl & 0x80, f_ctrl & 0x40, f_ctrl & 0x20, f_ctrl & 0x10, f_ctrl & 0x0f)
-            self.f_cnt = mac_payload[5:7:-1]
+            self.adr, _, self.ack, _, f_opts_len = self.f_ctrl = (f_ctrl & 0x80, f_ctrl & 0x40, f_ctrl & 0x20, f_ctrl & 0x10, f_ctrl & 0x0f)
+            self.f_cnt = int.from_bytes(mac_payload[5:7], byteorder='little') # little-endian
             self.f_opts = mac_payload[7:7+f_opts_len]
 
             self.f_hdr = (self.dev_addr, self.f_ctrl, self.f_cnt, self.f_opts)
             fhdr_len = 7+f_opts_len
             print('fhdr_len: %i' % fhdr_len)
-            if fhdr_len == len(mac_payload):
-                self.f_port = mac_payload[fhdr_len:fhdr_len+1]
+            if fhdr_len != len(mac_payload):
+                self.f_port = int.from_bytes(mac_payload[fhdr_len:fhdr_len+1], byteorder='little')
                 self.frm_payload = mac_payload[fhdr_len+1:]
             else:
                 self.f_port = bytes()
