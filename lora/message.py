@@ -69,90 +69,93 @@ class FrameHeader(object):
         return 7+self.f_opts_len
 
 class Message(object):
-
-    class MessageType(object):
-        def __init__(self, uid, description, direction=None):
-            self.uid = uid
-            self.description = description
-            self.direction = direction
-
-        def __eq__(self, other):
-            if isinstance(other, self.__class__):
-                return self.uid == other.uid
-            return self.uid == other
-
-        def __ne__(self, other):
-            return not self.__eq__(other)
-
-    JOIN_REQUEST = MessageType(0, 'Join Request')
-    JOIN_ACCEPT = MessageType(1, 'Join Accept')
-    UNCONFIRMED_DATA_UP = MessageType(2, 'Unconfirmed Data Up', 0) # dir = 0 = uplink
-    UNCONFIRMED_DATA_DOWN = MessageType(3, 'Unconfirmed Data Down', 1) # dir = 1 = downlink
-    CONFIRMED_DATA_UP = MessageType(4, 'Confirmed Data Up', 0)
-    CONFIRMED_DATA_DOWN = MessageType(5, 'Confirmed Data Down', 1)
-
     @property
     def is_data_message(self):
         # TODO: set mtype
         if self.mtype in (
-                Message.UNCONFIRMED_DATA_UP,
-                Message.UNCONFIRMED_DATA_DOWN,
-                Message.CONFIRMED_DATA_UP,
-                Message.CONFIRMED_DATA_DOWN):
+                UnconfirmedDataUp,
+                UnconfirmedDataDown,
+                ConfirmedDataUp,
+                ConfirmedDataDown):
             return True
         return False
-
-    @property
-    def direction(self):
-        if self.mtype in (
-                Message.UNCONFIRMED_DATA_UP,
-                Message.CONFIRMED_DATA_UP):
-            return 0
-        elif self.mtype in (
-                Message.UNCONFIRMED_DATA_DOWN,
-                Message.CONFIRMED_DATA_DOWN):
-            return 1
 
     def __bytes__(self):
         return bytes([self.mhdr]) + self.mac_payload + self.mic
 
+    # TODO remove
+    @property
+    def mtype(self):
+        return message_types[self.mhdr >> 5]
+
     @classmethod
     def from_phy(cls, phy_payload):
-        return cls(
+        return cls.factory(
             mhdr=phy_payload[0], #payload[:1]
-            mac_payload=phy_payload[1:-4],
+            payload=phy_payload[1:-4],
             mic=phy_payload[-4:]
         )
 
-    def __init__(self, mhdr, mac_payload, mic):
+    @classmethod
+    def factory(cls, mhdr, payload, mic):
+        mtype, _, _ = (mhdr >> 5, mhdr & 0x03, mhdr & 0x1c)
+        return message_types[mtype](mhdr, payload, mic)
+
+    def __init__(self, mhdr, payload, mic):
         self.mhdr = mhdr
-        self.mtype, _, _ = (mhdr >> 5, mhdr & 0x03, mhdr & 0x1c)
-        self.mac_payload = mac_payload
+        mtype, _, _ = (mhdr >> 5, mhdr & 0x03, mhdr & 0x1c)
+        self.mac_payload = payload
         self.mic = mic
 
-        if self.mtype == Message.JOIN_REQUEST:
-            self.app_eui = mac_payload[:8:-1] # little-endian
-            self.dev_eui = mac_payload[8:16:-1] # little-endian
-            self.dev_nonce = mac_payload[16::-1] # little-endian
-        elif self.mtype == Message.JOIN_ACCEPT:
-            self.app_nonce = mac_payload[:3:-1] # 3 bytes little-endian
-            self.net_id = mac_payload[3:6:-1] # 3 bytes little-endian
-            self.dev_addr = mac_payload[6:10:-1] # 4 bytes little-endian
-            self.dl_settings = mac_payload[10] # 1 byte
-            self.rx_delay = mac_payload[11] # 1 byte
-            if len(mac_payload) == 12+16:
-                self.cf_list = mac_payload[12:] # 16 bytes, optional
-            else:
-                self.cf_list = bytes()
-        elif self.is_data_message:
-            self.f_hdr = FrameHeader(mac_payload, self.direction)
+    @classmethod
+    def from_hex(cls, _hex):
+        return cls.from_phy(
+            bytearray.fromhex(_hex)
+        )
 
-            if len(self.f_hdr) != len(mac_payload):
-                self.f_port = int.from_bytes(mac_payload[len(self.f_hdr):len(self.f_hdr)+1], byteorder='little')
-                self.frm_payload = mac_payload[len(self.f_hdr)+1:]
-            else:
-                self.f_port = bytes()
-                self.frm_payload = bytes()
+class JoinRequest(Message):
+    def __init__(self, mhdr, join_request, mic):
+        super().__init__(mhdr, join_request, mic)
+        assert self.mtype is JoinRequest
+        self.app_eui = join_request[:8:-1] # little-endian
+        self.dev_eui = join_request[8:16:-1] # little-endian
+        self.dev_nonce = join_request[16::-1] # little-endian
+
+    @property
+    def join_request(self):
+        return self.mac_payload
+
+class JoinAccept(Message):
+    def __init__(self, mhdr, join_response, mic):
+        super().__init__(mhdr, join_response, mic)
+        assert self.mtype is JoinAccept
+        self.app_nonce = join_response[:3:-1] # 3 bytes little-endian
+        self.net_id = join_response[3:6:-1] # 3 bytes little-endian
+        self.dev_addr = join_response[6:10:-1] # 4 bytes little-endian
+        self.dl_settings = join_response[10] # 1 byte
+        self.rx_delay = join_response[11] # 1 byte
+        if len(join_response) == 12+16:
+            self.cf_list = join_response[12:] # 16 bytes, optional
+        else:
+            self.cf_list = bytes()
+
+    @property
+    def join_response(self):
+        return self.mac_payload
+
+class DataMessage(Message):
+    def __init__(self, mhdr, mac_payload, mic):
+        super().__init__(mhdr, mac_payload, mic)
+        assert self.is_data_message
+        #self.__cls__ = self.mtype
+        self.f_hdr = FrameHeader(mac_payload, self.direction)
+
+        if len(self.f_hdr) != len(mac_payload):
+            self.f_port = int.from_bytes(mac_payload[len(self.f_hdr):len(self.f_hdr)+1], byteorder='little')
+            self.frm_payload = mac_payload[len(self.f_hdr)+1:]
+        else:
+            self.f_port = bytes()
+            self.frm_payload = bytes()
 
     @property
     def dev_addr(self):
@@ -167,8 +170,20 @@ class Message(object):
     def f_opts(self):
         return self.f_hdr.f_opts
 
-    @classmethod
-    def from_hex(cls, _hex):
-        return cls.from_phy(
-            bytearray.fromhex(_hex)
-        )
+class UnconfirmedDataUp(DataMessage):
+    direction = 0
+class UnconfirmedDataDown(DataMessage):
+    direction = 1
+class ConfirmedDataUp(DataMessage):
+    direction = 0
+class ConfirmedDataDown(DataMessage):
+    direction = 1
+
+message_types = {
+    0: JoinRequest,
+    1: JoinAccept,
+    2: UnconfirmedDataUp,
+    3: UnconfirmedDataDown,
+    4: ConfirmedDataUp,
+    5: ConfirmedDataDown
+}
