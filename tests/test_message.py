@@ -13,8 +13,8 @@ def reorder(buf):
 class TestMessage(unittest.TestCase):
     def test_parse_message(self):
         message = Message.from_hex("40F17DBE4900020001954378762B11FF0D")
-        assert message.phy_paylod == bytearray.fromhex('40f17dbe4900020001954378762b11ff0d')
-        assert message.mhdr == (2, 0, 0)
+        assert bytes(message) == bytearray.fromhex('40f17dbe4900020001954378762b11ff0d')
+        assert message.mhdr == 0x40
         assert message.mac_payload == bytearray.fromhex('f17dbe490002000195437876')
         assert message.mic == bytearray.fromhex('2b11ff0d')
         assert message.f_opts == bytearray()
@@ -25,7 +25,7 @@ class TestMessage(unittest.TestCase):
         assert message.f_port == 1
         assert message.frm_payload == bytearray.fromhex('95437876')
 
-        assert message.mtype == message.mhdr[0] == Message.UNCONFIRMED_DATA_UP
+        assert message.mtype == Message.UNCONFIRMED_DATA_UP
 
         assert message.f_ctrl.ack == False
         assert message.f_ctrl.adr == False

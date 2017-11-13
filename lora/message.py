@@ -113,16 +113,22 @@ class Message(object):
                 Message.CONFIRMED_DATA_DOWN):
             return 1
 
-    @property
-    def phy_paylod(self):
-        return self.payload
+    def __bytes__(self):
+        return bytes([self.mhdr]) + self.mac_payload + self.mic
 
-    def __init__(self, payload):
-        self.payload = payload # phy payload
-        mhdr = payload[0] #payload[:1]
-        self.mtype, _, _ = self.mhdr = (mhdr >> 5, mhdr & 0x03, mhdr & 0x1c)
-        self.mac_payload = mac_payload = payload[1:-4]
-        self.mic = payload[-4:]
+    @classmethod
+    def from_phy(cls, phy_payload):
+        return cls(
+            mhdr=phy_payload[0], #payload[:1]
+            mac_payload=phy_payload[1:-4],
+            mic=phy_payload[-4:]
+        )
+
+    def __init__(self, mhdr, mac_payload, mic):
+        self.mhdr = mhdr
+        self.mtype, _, _ = (mhdr >> 5, mhdr & 0x03, mhdr & 0x1c)
+        self.mac_payload = mac_payload
+        self.mic = mic
 
         if self.mtype == Message.JOIN_REQUEST:
             self.app_eui = mac_payload[:8:-1] # little-endian
@@ -163,6 +169,6 @@ class Message(object):
 
     @classmethod
     def from_hex(cls, _hex):
-        return cls(
+        return cls.from_phy(
             bytearray.fromhex(_hex)
         )
