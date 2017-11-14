@@ -3,12 +3,23 @@ from typing import ByteString
 
 class FrameControl(object):
     def __init__(self, ctrl_byte):
-        self.adr = ctrl_byte & 0x80
-        self.flag6 = ctrl_byte & 0x40
-        self.ack = ctrl_byte & 0x20
-        self.flag4 = ctrl_byte & 0x10
-        self.f_opts_len = ctrl_byte & 0x0f
         self.ctrl_byte = ctrl_byte
+
+    @property
+    def adr(self):
+        return bool(self.ctrl_byte & 0x80)
+    @property
+    def bit6(self):
+        return bool(self.ctrl_byte & 0x40)
+    @property
+    def ack(self):
+        return bool(self.ctrl_byte & 0x20)
+    @property
+    def bit4(self):
+        return bool(self.ctrl_byte & 0x10)
+    @property
+    def f_opts_len(self):
+        return self.ctrl_byte & 0x0f
 
     def __bytes__(self):
         return bytes([self.ctrl_byte])
@@ -20,20 +31,12 @@ class FrameControl(object):
         return not self.__eq__(other)
 
 class DownlinkFrameControl(FrameControl):
-    @property
-    def rfu(self):
-        return self.flag6
-    @property
-    def f_pending(self):
-        return self.flag4
+    rfu = FrameControl.bit6
+    f_pending = FrameControl.bit4
 
 class UplinkFrameControl(FrameControl):
-    @property
-    def adr_ack_req(self):
-        return self.flag6
-    @property
-    def rfu(self):
-        return self.flag4
+    adr_ack_req = FrameControl.bit6
+    rfu = FrameControl.bit4
 
 class FrameHeader(object):
     def __init__(self, mac_payload, direction):
@@ -117,9 +120,9 @@ class JoinRequest(Message):
     def __init__(self, mhdr, join_request, mic):
         super().__init__(mhdr, join_request, mic)
         assert self.mtype is JoinRequest
-        self.app_eui = join_request[:8:-1] # little-endian
-        self.dev_eui = join_request[8:16:-1] # little-endian
-        self.dev_nonce = join_request[16::-1] # little-endian
+        self.app_eui = join_request[:8] # little-endian
+        self.dev_eui = join_request[8:16] # little-endian
+        self.dev_nonce = join_request[16:] # little-endian
 
     @property
     def join_request(self):
@@ -129,9 +132,9 @@ class JoinAccept(Message):
     def __init__(self, mhdr, join_response, mic):
         super().__init__(mhdr, join_response, mic)
         assert self.mtype is JoinAccept
-        self.app_nonce = join_response[:3:-1] # 3 bytes little-endian
-        self.net_id = join_response[3:6:-1] # 3 bytes little-endian
-        self.dev_addr = join_response[6:10:-1] # 4 bytes little-endian
+        self.app_nonce = join_response[:3] # 3 bytes little-endian
+        self.net_id = join_response[3:6] # 3 bytes little-endian
+        self.dev_addr = join_response[6:10] # 4 bytes little-endian
         self.dl_settings = join_response[10] # 1 byte
         self.rx_delay = join_response[11] # 1 byte
         if len(join_response) == 12+16:
