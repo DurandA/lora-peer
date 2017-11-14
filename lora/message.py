@@ -110,12 +110,6 @@ class Message(object):
         self.mac_payload = payload
         self.mic = mic
 
-    @classmethod
-    def from_hex(cls, _hex):
-        return cls.from_phy(
-            bytearray.fromhex(_hex)
-        )
-
 class JoinRequest(Message):
     def __init__(self, mhdr, join_request, mic):
         super().__init__(mhdr, join_request, mic)
