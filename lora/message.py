@@ -1,5 +1,9 @@
 import struct
-from typing import ByteString
+from cryptography.hazmat.backends import default_backend
+#from cryptography.hazmat.primitives import cmac
+from cryptography.hazmat.primitives.cmac import CMAC
+from cryptography.hazmat.primitives.ciphers import algorithms
+
 
 class FrameControl(object):
     def __init__(self, ctrl_byte):
@@ -68,6 +72,12 @@ class FrameHeader(object):
     # def adr_ack_req(self):
     #     return self.f_ctrl.adr_ack_req
 
+    def __bytes__(self):
+        return ( bytes(self.dev_addr)
+                + bytes(self.f_ctrl)
+                + self.f_cnt.to_bytes(2, 'little')
+                + self.f_opts )
+
     def __len__(self):
         return 7+self.f_opts_len
 
@@ -109,6 +119,27 @@ class Message(object):
         mtype, _, _ = (mhdr >> 5, mhdr & 0x03, mhdr & 0x1c)
         self.mac_payload = payload
         self.mic = mic
+
+    def calculate_mic(self, nwk_skey):
+        if isinstance(self, DataMessage):
+            msg = ( bytes([self.mhdr])
+                    + bytes(self.f_hdr)
+                    + bytes([self.f_port])
+                    + bytes(self.frm_payload) )
+            b0 = ( b'\x49\x00\x00\x00\x00'
+                    + bytes([self.direction])
+                    + self.dev_addr
+                    + self.f_cnt.to_bytes(4, 'little')
+                    + b'\x00'+bytes([len(msg)]) )
+            c = CMAC(algorithms.AES(nwk_skey), backend=default_backend())
+            c.update(b0 + msg)
+            cmac = c.finalize()
+            mic = cmac[0:4]
+        else:
+            return
+        return mic
+
+
 
 class JoinRequest(Message):
     def __init__(self, mhdr, join_request, mic):
