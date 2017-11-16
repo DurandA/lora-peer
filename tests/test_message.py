@@ -74,8 +74,13 @@ class TestMIC(unittest.TestCase):
     def test_calculate_and_verify_correct_mic_join_request(self):
         message = MACMessage.from_phy(bytes.fromhex("00dc0000d07ed5b3701e6fedf57ceeaf00c886030af2c9"))
 
-        nwk_skey = bytes.fromhex("44024241ed4ce9a68c6a8bc055233fd3")
-        calculated_mic = message.calculate_mic(nwk_skey)
+        app_key = bytes.fromhex("00000000000000000000000000000000")
+        calculated_mic = message.calculate_mic(app_key)
+        import binascii
+        print(binascii.hexlify(calculated_mic))
+        #assert calculated_mic == bytes.fromhex('030af2C9')
+
+        #assert message.verify_mic(app_key)
 
     def test_calculate_and_verify_correct_mic(self):
         message = MACMessage.from_phy(bytes.fromhex("40F17DBE49000300012A3518AF"))
@@ -83,6 +88,8 @@ class TestMIC(unittest.TestCase):
         nwk_skey = bytes.fromhex("44024241ed4ce9a68c6a8bc055233fd3")
         calculated_mic = message.calculate_mic(nwk_skey)
         assert calculated_mic == bytes.fromhex('2a3518af')
+
+        assert message.verify_mic(nwk_skey)
 
 
 if __name__ == '__main__':

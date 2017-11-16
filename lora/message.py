@@ -120,8 +120,11 @@ class MACMessage(object):
         self.mac_payload = payload
         self.mic = mic
 
-    def calculate_mic(self, nwk_skey):
+    def calculate_mic(self):
         raise NotImplementedError('MIC is not yet implemented for %s' % type(self).__name__)
+
+    def verify_mic(self, nwk_skey):
+        return self.calculate_mic(nwk_skey) == self.mic
 
 class JoinRequest(MACMessage):
     def __init__(self, mhdr, join_request, mic):
@@ -130,6 +133,17 @@ class JoinRequest(MACMessage):
         self.app_eui = join_request[:8] # little-endian
         self.dev_eui = join_request[8:16] # little-endian
         self.dev_nonce = join_request[16:] # little-endian
+
+    def calculate_mic(self, app_key):
+        msg = ( bytes([self.mhdr])
+                + bytes(self.app_eui)
+                + bytes(self.dev_eui)
+                + bytes(self.dev_nonce) )
+        c = CMAC(algorithms.AES(app_key), backend=default_backend())
+        c.update(msg)
+        cmac = c.finalize()
+        mic = cmac[0:4]
+        return mic
 
     @property
     def join_request(self):
@@ -148,6 +162,20 @@ class JoinAccept(MACMessage):
             self.cf_list = join_response[12:] # 16 bytes, optional
         else:
             self.cf_list = bytes()
+
+    def calculate_mic(self, app_key):
+        msg = ( bytes([self.mhdr])
+                + bytes(self.app_nonce)
+                + bytes(self.net_id)
+                + bytes(self.dev_addr)
+                + bytes([self.dl_settings])
+                + bytes([self.rx_delay])
+                + bytes(self.cf_list) )
+        c = CMAC(algorithms.AES(app_key), backend=default_backend())
+        c.update(msg)
+        cmac = c.finalize()
+        mic = cmac[0:4]
+        return mic
 
     @property
     def join_response(self):
