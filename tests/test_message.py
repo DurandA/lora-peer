@@ -1,10 +1,10 @@
 import unittest
-from lora.message import Message, JoinRequest, JoinAccept, UnconfirmedDataUp, UnconfirmedDataDown
+from lora.message import MACMessage, JoinRequest, JoinAccept, UnconfirmedDataUp, UnconfirmedDataDown
 
 
 class TestParse(unittest.TestCase):
     def test_parse_message(self):
-        message = Message.from_phy(bytes.fromhex("40F17DBE4900020001954378762B11FF0D"))
+        message = MACMessage.from_phy(bytes.fromhex("40F17DBE4900020001954378762B11FF0D"))
 
         assert bytes(message) == bytes.fromhex('40f17dbe4900020001954378762b11ff0d')
         assert message.mhdr == 0x40
@@ -24,13 +24,13 @@ class TestParse(unittest.TestCase):
         assert message.f_ctrl.adr == False
 
     def test_parse_empty_payload_message(self):
-        message = Message.from_phy(bytes.fromhex("40F17DBE49000300012A3518AF"))
+        message = MACMessage.from_phy(bytes.fromhex("40F17DBE49000300012A3518AF"))
 
     def test_parse_large_message(self):
         pass
 
     def test_parse_ack(self):
-        message = Message.from_phy(bytes.fromhex("60f17dbe4920020001f9d65d27"))
+        message = MACMessage.from_phy(bytes.fromhex("60f17dbe4920020001f9d65d27"))
 
         assert bytes(message) == bytes.fromhex('60f17dbe4920020001f9d65d27')
         assert message.mhdr == 0x60
@@ -53,7 +53,7 @@ class TestParse(unittest.TestCase):
         pass
 
     def test_parse_join_request(self):
-        message = Message.from_phy(bytes.fromhex("00dc0000d07ed5b3701e6fedf57ceeaf00c886030af2c9"))
+        message = MACMessage.from_phy(bytes.fromhex("00dc0000d07ed5b3701e6fedf57ceeaf00c886030af2c9"))
 
         assert bytes(message) == bytes.fromhex('00dc0000d07ed5b3701e6fedf57ceeaf00c886030af2c9')
         assert message.mhdr == 0x00
@@ -65,20 +65,20 @@ class TestParse(unittest.TestCase):
         assert type(message) is JoinRequest
 
     def test_parse_join_accept(self):
-        message = Message.from_phy(bytes.fromhex("20813f47f508ffa2670b6e23e01f84b9e25d9c4115f02eea0b3dd3e20b3eca92da"))
+        message = MACMessage.from_phy(bytes.fromhex("20813f47f508ffa2670b6e23e01f84b9e25d9c4115f02eea0b3dd3e20b3eca92da"))
 
         assert bytes(message) == bytes.fromhex("20813f47f508ffa2670b6e23e01f84b9e25d9c4115f02eea0b3dd3e20b3eca92da")
         assert type(message) is JoinAccept
 
 class TestMIC(unittest.TestCase):
     def test_calculate_and_verify_correct_mic_join_request(self):
-        message = Message.from_phy(bytes.fromhex("00dc0000d07ed5b3701e6fedf57ceeaf00c886030af2c9"))
+        message = MACMessage.from_phy(bytes.fromhex("00dc0000d07ed5b3701e6fedf57ceeaf00c886030af2c9"))
 
         nwk_skey = bytes.fromhex("44024241ed4ce9a68c6a8bc055233fd3")
         calculated_mic = message.calculate_mic(nwk_skey)
 
     def test_calculate_and_verify_correct_mic(self):
-        message = Message.from_phy(bytes.fromhex("40F17DBE49000300012A3518AF"))
+        message = MACMessage.from_phy(bytes.fromhex("40F17DBE49000300012A3518AF"))
 
         nwk_skey = bytes.fromhex("44024241ed4ce9a68c6a8bc055233fd3")
         calculated_mic = message.calculate_mic(nwk_skey)

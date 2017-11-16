@@ -81,7 +81,7 @@ class FrameHeader(object):
     def __len__(self):
         return 7+self.f_opts_len
 
-class Message(object):
+class MACMessage(object):
     @property
     def is_data_message(self):
         # TODO: set mtype
@@ -121,27 +121,9 @@ class Message(object):
         self.mic = mic
 
     def calculate_mic(self, nwk_skey):
-        if isinstance(self, DataMessage):
-            msg = ( bytes([self.mhdr])
-                    + bytes(self.f_hdr)
-                    + bytes([self.f_port])
-                    + bytes(self.frm_payload) )
-            b0 = ( b'\x49\x00\x00\x00\x00'
-                    + bytes([self.direction])
-                    + self.dev_addr
-                    + self.f_cnt.to_bytes(4, 'little')
-                    + b'\x00'+bytes([len(msg)]) )
-            c = CMAC(algorithms.AES(nwk_skey), backend=default_backend())
-            c.update(b0 + msg)
-            cmac = c.finalize()
-            mic = cmac[0:4]
-        else:
-            return
-        return mic
+        raise NotImplementedError('MIC is not yet implemented for %s' % type(self).__name__)
 
-
-
-class JoinRequest(Message):
+class JoinRequest(MACMessage):
     def __init__(self, mhdr, join_request, mic):
         super().__init__(mhdr, join_request, mic)
         assert self.mtype is JoinRequest
@@ -153,7 +135,7 @@ class JoinRequest(Message):
     def join_request(self):
         return self.mac_payload
 
-class JoinAccept(Message):
+class JoinAccept(MACMessage):
     def __init__(self, mhdr, join_response, mic):
         super().__init__(mhdr, join_response, mic)
         assert self.mtype is JoinAccept
@@ -171,7 +153,7 @@ class JoinAccept(Message):
     def join_response(self):
         return self.mac_payload
 
-class DataMessage(Message):
+class DataMessage(MACMessage):
     def __init__(self, mhdr, mac_payload, mic):
         super().__init__(mhdr, mac_payload, mic)
         assert self.is_data_message
@@ -184,6 +166,22 @@ class DataMessage(Message):
         else:
             self.f_port = bytes()
             self.frm_payload = bytes()
+
+    def calculate_mic(self, nwk_skey):
+        msg = ( bytes([self.mhdr])
+                + bytes(self.f_hdr)
+                + bytes([self.f_port])
+                + bytes(self.frm_payload) )
+        b0 = ( b'\x49\x00\x00\x00\x00'
+                + bytes([self.direction])
+                + self.dev_addr
+                + self.f_cnt.to_bytes(4, 'little')
+                + b'\x00'+bytes([len(msg)]) )
+        c = CMAC(algorithms.AES(nwk_skey), backend=default_backend())
+        c.update(b0 + msg)
+        cmac = c.finalize()
+        mic = cmac[0:4]
+        return mic
 
     @property
     def dev_addr(self):
