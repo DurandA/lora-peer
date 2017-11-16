@@ -1,84 +1,71 @@
 import json
 from base64 import b64decode
 
-class UpstreamProtocol(object):
-    class PushData:
-        identifier = b'\x00'
 
-        def __init__(self, token, gateway_id, json_obj, protocol_verison=b'\x01'):
-            self.protocol_verison = protocol_verison
-            self.token = token
-            self.gateway_id = gateway_id
-            self._json_obj = json_obj
+class Protocol(object):
+    def __init__(self, protocol_verison, token, payload=None):
+        self.protocol_verison = protocol_verison
+        self.token = token
+        self.payload = payload or bytes()
 
-        @property
-        def json_obj(self):
-            return json.loads(self._json_obj.decode())
+    @classmethod
+    def factory(cls, protocol_verison, token, identifier, payload):
+        return packet_types[identifier](protocol_verison, token, payload=payload)
 
-        @property
-        def data(self):
-            try:
-                return b64decode(self.json_obj['rxpk'][0]['data'])
-            except KeyError:
-                print('ERROR')
-                print(self.json_obj)
+    @classmethod
+    def from_packet(cls, packet):
+        return cls.factory(
+            protocol_verison=packet[0],
+            token=packet[1:3],
+            identifier=packet[3],
+            payload=packet[4:]
+        )
 
-        def __str__(self):
-            data = self.data
-            mhdr = data[:1]
-            print('mtype')
-            print(mhdr[0] >> 5)
-            return 'PUSH_DATA: %r' % self.json_obj
+    def __bytes__(self):
+        return bytes([self.protocol_verison]) + self.token + bytes([self.identifier]) + self.payload
 
-        @classmethod
-        def from_bytes(cls, data):
-            return cls(
-                protocol_verison = data[0:1],
-                token = data[1:3],
-                gateway_id = data[4:12],
-                json_obj = data[12:]
-            )
+    def __str__(self):
+        return '%s (%i)' % (type(self).__name__, self.protocol_verison)
 
-    class PushAck:
-        identifier = b'\x01'
+class UpstreamProtocol(Protocol):
+    pass
 
-        def __init__(self, token, protocol_verison=b'\x01'):
-            self.protocol_verison = protocol_verison
-            self.token = token
+class DownstreamProtocol(Protocol):
+    pass
 
-        def __bytes__(self):
-            return (self.protocol_verison +
-                    self.token +
-                    self.identifier)
+class PushData(UpstreamProtocol):
+    identifier = 0x00
 
-class DownstreamProtocol(object):
-    class PullData:
-        identifier = b'\x02'
+    def __init__(self, protocol_verison, token, payload):
+        super().__init__(protocol_verison, token, payload)
+        self.gateway_id = payload[0:8]
+        self._json_obj = payload[8:]
 
-        def __init__(self, token, gateway_id, protocol_verison=b'\x01'):
-            self.protocol_verison = protocol_verison
-            self.token = token
-            self.gateway_id = gateway_id
+    @property
+    def json_obj(self):
+        return json.loads(self._json_obj.decode())
 
-        @classmethod
-        def from_bytes(cls, data):
-            return cls(
-                protocol_verison = data[0:1],
-                token = data[1:3],
-                gateway_id = data[4:12]
-            )
+    def __str__(self):
+        return '%s %r' % (super().__str__(), self.json_obj)
+        #return 'PUSH_DATA: %r' % self.json_obj
 
-        def __str__(self):
-            return 'PULL_DATA'
 
-    class PullAck:
-        identifier = b'\x04'
+class PushAck(UpstreamProtocol):
+    identifier = 0x01
 
-        def __init__(self, token, protocol_verison=b'\x01'):
-            self.protocol_verison = protocol_verison
-            self.token = token
+class PullData(DownstreamProtocol):
+    identifier = 0x02
 
-        def __bytes__(self):
-            return (self.protocol_verison +
-                    self.token +
-                    self.identifier)
+    def __init__(self, protocol_verison, token, payload):
+        super().__init__(protocol_verison, token, payload)
+        self.gateway_id = payload
+
+class PullAck(DownstreamProtocol):
+    identifier = 0x04
+
+packet_types = {
+    0: PushData,
+    1: PushAck,
+    2: PullData,
+    3: PullAck
+}
