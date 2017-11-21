@@ -25,7 +25,7 @@ class Protocol(object):
         return bytes([self.protocol_verison]) + self.token + bytes([self.identifier]) + self.payload
 
     def __str__(self):
-        return '%s (%i)' % (type(self).__name__, self.protocol_verison)
+        return '%s(v%i)' % (type(self).__name__, self.protocol_verison)
 
 class UpstreamProtocol(Protocol):
     pass

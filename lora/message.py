@@ -126,6 +126,9 @@ class MACMessage(object):
     def verify_mic(self, nwk_skey):
         return self.calculate_mic(nwk_skey) == self.mic
 
+    def __str__(self):
+        return '%s' % type(self).__name__
+
 class JoinRequest(MACMessage):
     def __init__(self, mhdr, join_request, mic):
         super().__init__(mhdr, join_request, mic)
@@ -148,6 +151,17 @@ class JoinRequest(MACMessage):
     @property
     def join_request(self):
         return self.mac_payload
+
+    def __str__(self):
+        import array
+        app_eui, dev_eui = (
+                array.array('L', self.app_eui),
+                array.array('L', self.dev_eui)
+            )
+        app_eui.byteswap()
+        dev_eui.byteswap()
+        hexlify = lambda x: "".join("{:02X}".format(c) for c in x)
+        return '%s (%s, %s)' % (super().__str__(), hexlify(app_eui), hexlify(dev_eui))
 
 class JoinAccept(MACMessage):
     def __init__(self, mhdr, join_response, mic):
