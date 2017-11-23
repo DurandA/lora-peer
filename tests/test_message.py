@@ -13,7 +13,7 @@ class TestParse(unittest.TestCase):
         assert message.f_opts == bytes()
         assert message.f_ctrl == b'\x00'
         # TODO check f_hdr
-        assert message.dev_addr == (0x49be7df1).to_bytes(4, byteorder='little')
+        assert message.dev_addr == 0x49be7df1
         assert message.f_cnt == 2
         assert message.f_port == 1
         assert message.frm_payload == bytes.fromhex('95437876')
@@ -39,7 +39,7 @@ class TestParse(unittest.TestCase):
         assert message.f_opts == bytes()
         assert message.f_ctrl == b'\x20'
         # TODO check f_hdr
-        assert message.dev_addr == (0x49be7df1).to_bytes(4, byteorder='little')
+        assert message.dev_addr == 0x49be7df1
         assert message.f_cnt == 2
         assert message.f_port == 1
         assert message.frm_payload == bytes()
@@ -57,8 +57,8 @@ class TestParse(unittest.TestCase):
 
         assert bytes(message) == bytes.fromhex('00dc0000d07ed5b3701e6fedf57ceeaf00c886030af2c9')
         assert message.mhdr == 0x00
-        assert message.app_eui == (0x70B3D57ED00000DC).to_bytes(8, byteorder='little')
-        assert message.dev_eui == (0x00AFEE7CF5ED6F1E).to_bytes(8, byteorder='little')
+        assert message.app_eui == 0x70B3D57ED00000DC
+        assert message.dev_eui == 0x00AFEE7CF5ED6F1E
         assert message.dev_nonce == (0x86C8).to_bytes(2, byteorder='little')
         assert message.mic == bytes.fromhex('030AF2C9')
 

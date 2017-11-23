@@ -1,9 +1,11 @@
-import struct
+import struct, array
 from cryptography.hazmat.backends import default_backend
 #from cryptography.hazmat.primitives import cmac
 from cryptography.hazmat.primitives.cmac import CMAC
 from cryptography.hazmat.primitives.ciphers import algorithms
 
+
+hexlify = lambda x: "".join("{:02X}".format(c) for c in x)
 
 class FrameControl(object):
     def __init__(self, ctrl_byte):
@@ -133,14 +135,14 @@ class JoinRequest(MACMessage):
     def __init__(self, mhdr, join_request, mic):
         super().__init__(mhdr, join_request, mic)
         assert self.mtype is JoinRequest
-        self.app_eui = join_request[:8] # little-endian
-        self.dev_eui = join_request[8:16] # little-endian
+        self.app_eui = int.from_bytes(join_request[:8], byteorder='little') # little-endian
+        self.dev_eui = int.from_bytes(join_request[8:16], byteorder='little') # little-endian
         self.dev_nonce = join_request[16:] # little-endian
 
     def calculate_mic(self, app_key):
         msg = ( bytes([self.mhdr])
-                + bytes(self.app_eui)
-                + bytes(self.dev_eui)
+                + self.app_eui.to_bytes(8, byteorder='little')
+                + self.dev_eui.to_bytes(8, byteorder='little')
                 + bytes(self.dev_nonce) )
         c = CMAC(algorithms.AES(app_key), backend=default_backend())
         c.update(msg)
@@ -153,15 +155,7 @@ class JoinRequest(MACMessage):
         return self.mac_payload
 
     def __str__(self):
-        import array
-        app_eui, dev_eui = (
-                array.array('L', self.app_eui),
-                array.array('L', self.dev_eui)
-            )
-        app_eui.byteswap()
-        dev_eui.byteswap()
-        hexlify = lambda x: "".join("{:02X}".format(c) for c in x)
-        return '%s (%s, %s)' % (super().__str__(), hexlify(app_eui), hexlify(dev_eui))
+        return '{} ({:x}, {:x})'.format(super().__str__(), self.app_eui, self.dev_eui)
 
 class JoinAccept(MACMessage):
     def __init__(self, mhdr, join_response, mic):
@@ -169,7 +163,7 @@ class JoinAccept(MACMessage):
         assert self.mtype is JoinAccept
         self.app_nonce = join_response[:3] # 3 bytes little-endian
         self.net_id = join_response[3:6] # 3 bytes little-endian
-        self.dev_addr = join_response[6:10] # 4 bytes little-endian
+        self.dev_addr = int.from_bytes(join_response[6:10], byteorder='little') # 4 bytes little-endian
         self.dl_settings = join_response[10] # 1 byte
         self.rx_delay = join_response[11] # 1 byte
         if len(join_response) == 12+16:
@@ -181,7 +175,7 @@ class JoinAccept(MACMessage):
         msg = ( bytes([self.mhdr])
                 + bytes(self.app_nonce)
                 + bytes(self.net_id)
-                + bytes(self.dev_addr)
+                + self.dev_addr.to_bytes(4, byteorder='little')
                 + bytes([self.dl_settings])
                 + bytes([self.rx_delay])
                 + bytes(self.cf_list) )
@@ -216,7 +210,7 @@ class DataMessage(MACMessage):
                 + bytes(self.frm_payload) )
         b0 = ( b'\x49\x00\x00\x00\x00'
                 + bytes([self.direction])
-                + self.dev_addr
+                + self.dev_addr.to_bytes(4, 'little')
                 + self.f_cnt.to_bytes(4, 'little')
                 + b'\x00'+bytes([len(msg)]) )
         c = CMAC(algorithms.AES(nwk_skey), backend=default_backend())
@@ -225,9 +219,13 @@ class DataMessage(MACMessage):
         mic = cmac[0:4]
         return mic
 
+    def __str__(self):
+        return '{} ({:08x})'.format(super().__str__(), self.dev_addr)
+
     @property
     def dev_addr(self):
-        return self.f_hdr.dev_addr
+        return int.from_bytes(self.f_hdr.dev_addr, byteorder='little')
+
     @property
     def f_ctrl(self):
         return self.f_hdr.f_ctrl
