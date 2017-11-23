@@ -27,6 +27,15 @@ class Protocol(object):
     def __str__(self):
         return '%s(v%i)' % (type(self).__name__, self.protocol_verison)
 
+    @classmethod
+    def from_packet(cls, packet):
+        return cls.factory(
+            protocol_verison=packet[0],
+            token=packet[1:3],
+            identifier=packet[3],
+            payload=packet[4:]
+        )
+
 class UpstreamProtocol(Protocol):
     pass
 
@@ -63,9 +72,21 @@ class PullData(DownstreamProtocol):
 class PullAck(DownstreamProtocol):
     identifier = 0x04
 
+class PullResp(DownstreamProtocol):
+    identifier = 0x03
+
+    def __init__(self, protocol_verison, token, payload):
+        super().__init__(protocol_verison, token, payload)
+        self._json_obj = payload
+
+    @property
+    def json_obj(self):
+        return json.loads(self._json_obj.decode())
+
 packet_types = {
-    0: PushData,
-    1: PushAck,
-    2: PullData,
-    3: PullAck
+    0x00: PushData,
+    0x01: PushAck,
+    0x02: PullData,
+    0x04: PullAck,
+    0x03: PullResp
 }
