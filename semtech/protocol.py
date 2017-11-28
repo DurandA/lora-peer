@@ -56,8 +56,6 @@ class PushData(UpstreamProtocol):
 
     def __str__(self):
         return '%s %r' % (super().__str__(), self.json_obj)
-        #return 'PUSH_DATA: %r' % self.json_obj
-
 
 class PushAck(UpstreamProtocol):
     identifier = 0x01
@@ -82,6 +80,9 @@ class PullResp(DownstreamProtocol):
     @property
     def json_obj(self):
         return json.loads(self._json_obj.decode())
+
+    def __str__(self):
+        return '%s %r' % (super().__str__(), self.json_obj)
 
 packet_types = {
     0x00: PushData,
