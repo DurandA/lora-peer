@@ -61,3 +61,20 @@ docs/_build/
 # PyBuilder
 target/
 
+# See http://help.github.com/ignore-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+
+# testing
+coverage
+
+# production
+build
+build_webpack
+
+# misc
+.DS_Store
+.env
+npm-debug.log
+.truffle-solidity-loader
