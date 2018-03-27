@@ -22,16 +22,17 @@ contract addressable {
 }
 
 contract LoraRouter is addressable {
-    mapping (uint64 => address) public appEuis;
+    mapping (uint64 => address) public joinEuis;
     uint nonce = 1337;
 
-    function registerAppEui() returns (uint64) {
-        nonce++;
-        uint64 appEui = uint64(sha3(nonce));
-        appEuis[appEui] = msg.sender;
-        AppEuiRegistered(msg.sender, appEui);
-        return appEui;
+    function registerJoinEui() returns (uint64) {
+        uint lastBlockHash = uint(block.blockhash(block.number - 1));
+        uint64 joinEui = uint64(sha3(lastBlockHash, nonce));
+        nonce = joinEui;
+        joinEuis[joinEui] = msg.sender;
+        JoinEuiRegistered(msg.sender, joinEui);
+        return joinEui;
     }
 
-    event AppEuiRegistered(address indexed registrant, uint64 indexed appEui);
+    event JoinEuiRegistered(address indexed registrant, uint64 indexed joinEui);
 }
