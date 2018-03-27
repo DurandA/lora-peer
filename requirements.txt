@@ -1,0 +1,2 @@
+aioethereum>=0.2.1
+git+git://github.com/DurandA/lorawan-parser.git
