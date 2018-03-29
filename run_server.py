@@ -4,8 +4,6 @@ from binascii import hexlify
 from datetime import datetime, timedelta
 from os import urandom
 
-import aioethereum
-
 from lorawan.message import JoinAccept, JoinRequest, MACMessage
 from semtech.protocol import (Protocol, PullAck, PullData, PullResp, PushAck,
                               PushData)
