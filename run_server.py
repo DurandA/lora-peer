@@ -8,10 +8,11 @@ from lorawan.message import JoinAccept, JoinRequest, MACMessage
 from semtech.protocol import (Protocol, PullAck, PullData, PullResp, PushAck,
                               PushData)
 
-class EchoServerProtocol:
+class ForwarderProtocol:
 
-    def __init__(self, remote_addr, loop):
-        self.remote_addr = remote_addr
+    def __init__(self, resolver, loop):
+        self.resolver = resolver
+
         self.remotes = {}
         self.gw_addr = None
         self.loop = loop
@@ -31,13 +32,13 @@ class EchoServerProtocol:
                     message = MACMessage.from_phy(phy_payload)
                     print('\x1b[0;30;42m%s\x1b[0m' % message)
                     if type(message) is JoinRequest:
-                        print(message.verify_mic(bytes.fromhex('442DD2300ED0E4967BBCCA25707E4C1E')))
+                        # print(message.verify_mic(bytes.fromhex('442DD2300ED0E4967BBCCA25707E4C1E')))
                         app_eui = message.app_eui
                         if app_eui in self.remotes:
                             self.remotes[app_eui].q.put_nowait(data)
                             #self.remotes[app_eui].transport.sendto(data)
                             return
-                        self.create_remote(app_eui, packet.gateway_id, data)
+                        asyncio.ensure_future(self.create_remote(app_eui, packet.gateway_id, data))
 
             #ack = PushAck(packet.protocol_verison, packet.token)
             #self.transport.sendto(bytes(ack), addr)
@@ -56,15 +57,15 @@ class EchoServerProtocol:
             pass
             #self.transport.sendto(data, self.gw_addr)
 
-    def create_remote(self, app_eui, gateway_id, packet):
-        addr = self.remote_addr
-        self.remotes[app_eui] = RemoteDatagramProtocol(self, addr, gateway_id, packet)
-        coro = self.loop.create_datagram_endpoint(
+    async def create_remote(self, app_eui, gateway_id, packet):
+        addr = await self.resolver() # todo resolve
+
+        self.remotes[app_eui] = ApplicationServerProtocol(self, addr, gateway_id, packet)
+        await self.loop.create_datagram_endpoint(
             lambda: self.remotes[app_eui], remote_addr=addr)
-        asyncio.ensure_future(coro)
 
 
-class RemoteDatagramProtocol(asyncio.DatagramProtocol):
+class ApplicationServerProtocol(asyncio.DatagramProtocol):
 
     def __init__(self, proxy, addr, gateway_id, push_data):
         self.proxy = proxy
@@ -111,8 +112,8 @@ class RemoteDatagramProtocol(asyncio.DatagramProtocol):
             phy_payload = b64decode(obj['data'])
             message = MACMessage.from_phy(phy_payload)
             print('\x1b[0;30;41m%s\x1b[0m' % message)
-            return
             self.proxy.transport.sendto(data, self.proxy.gw_addr)
+            return
         if type(packet) is PushAck:
             pass
 
@@ -121,9 +122,14 @@ class RemoteDatagramProtocol(asyncio.DatagramProtocol):
 
 loop = asyncio.get_event_loop()
 print("Starting UDP server")
+
+async def resolver():
+    default_addr=('127.0.0.1', 9999)
+    return default_addr
+
 # One protocol instance will be created to serve all client requests
 listen = loop.create_datagram_endpoint(
-    lambda: EchoServerProtocol(remote_addr=('127.0.0.1', 9999), loop=loop), local_addr=('0.0.0.0', 1680))
+    lambda: ForwarderProtocol(resolver, loop=loop), local_addr=('0.0.0.0', 1680))
 transport, protocol = loop.run_until_complete(listen)
 
 try:
