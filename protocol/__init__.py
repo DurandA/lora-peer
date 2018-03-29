@@ -9,8 +9,8 @@ from semtech.protocol import (Protocol, PullAck, PullData, PullResp, PushAck,
 
 class ForwarderProtocol:
 
-    def __init__(self, resolver, loop):
-        self.resolver = resolver
+    def __init__(self, resolve, loop):
+        self.resolve = resolve
 
         self.remotes = {}
         self.gw_addr = None
@@ -57,9 +57,9 @@ class ForwarderProtocol:
             #self.transport.sendto(data, self.gw_addr)
 
     async def create_remote(self, app_eui, gateway_id, packet):
-        addr = await self.resolver() # todo resolve
+        addr = await self.resolve() # todo resolve
 
-        self.remotes[app_eui] = ApplicationServerProtocol(self, addr, gateway_id, packet, self.loop)
+        self.remotes[app_eui] = ApplicationServerProtocol(self, (addr, 1680), gateway_id, packet, self.loop)
         await self.loop.create_datagram_endpoint(
             lambda: self.remotes[app_eui], remote_addr=addr)
 

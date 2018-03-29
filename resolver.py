@@ -32,7 +32,7 @@ class Resolver(object):
 
 
 if __name__ == '__main__':
-    import sys, argparse, asyncio
+    import argparse, asyncio
 
     hex = lambda value: int(value, 16)
     parser = argparse.ArgumentParser(
