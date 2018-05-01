@@ -2,6 +2,7 @@ import asyncio
 from base64 import b64decode
 from datetime import datetime, timedelta
 from os import urandom
+from collections import defaultdict
 
 from lorawan.message import JoinAccept, JoinRequest, MACMessage
 from semtech.protocol import (Protocol, PullAck, PullData, PullResp, PushAck,
@@ -25,6 +26,7 @@ class ForwarderProtocol:
         print('Received \x1b[0;30;46m%s\x1b[0m from %s' % (packet, addr))
         if type(packet) is PushData:
             self.gw_addr = self.gw_addr or addr
+            s_bucket = defaultdict(list)
             if 'rxpk' in packet.json_obj:
                 for obj in packet.json_obj['rxpk']:
                     phy_payload = b64decode(obj['data'])
@@ -33,11 +35,16 @@ class ForwarderProtocol:
                     if type(message) is JoinRequest:
                         # print(message.verify_mic(bytes.fromhex('442DD2300ED0E4967BBCCA25707E4C1E')))
                         app_eui = message.app_eui
-                        if app_eui in self.remotes:
-                            self.remotes[app_eui].q.put_nowait(data)
-                            #self.remotes[app_eui].transport.sendto(data)
+                        if app_eui not in self.remotes:
+                            asyncio.ensure_future(self.create_remote(app_eui, packet.gateway_id, data))
                             return
-                        asyncio.ensure_future(self.create_remote(app_eui, packet.gateway_id, data))
+                    for join_eui in self.remotes:
+                        s_bucket[join_eui].append(obj)
+                        self.remotes[app_eui].q.put_nowait(data)
+            for join_eui, remote in self.remotes.items():
+                s_packet = PushData(packet.protocol_verison, packet.token)
+                s_packet.json_obj = {"rxpk": s_bucket[join_eui]}
+                remote.q.put_nowait(s_packet)
 
             #ack = PushAck(packet.protocol_verison, packet.token)
             #self.transport.sendto(bytes(ack), addr)

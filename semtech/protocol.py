@@ -2,9 +2,15 @@ import json
 from base64 import b64decode
 
 
+class TokenFormatException(Exception):
+    pass
+
+
 class Protocol(object):
     def __init__(self, protocol_verison, token, payload=None):
         self.protocol_verison = protocol_verison
+        if not isinstance(token, bytes) and len(token)!=2:
+            raise TokenFormatException
         self.token = token
         self.payload = payload or bytes()
 
@@ -53,6 +59,10 @@ class PushData(UpstreamProtocol):
     @property
     def json_obj(self):
         return json.loads(self._json_obj.decode())
+
+    @json_obj.setter
+    def json_obj(self, json_obj):
+        self._json_obj = json.dumps(json_obj).encode()
 
     def __str__(self):
         return '%s %r' % (super().__str__(), self.json_obj)
